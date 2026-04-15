@@ -1,300 +1,258 @@
-# QA Discovery Plan for Backstage
+# Solo QA MVP Plan for Backstage
 
-This document is a structured discovery plan intended to help a QA team ramp up
-on the Backstage project. It captures the scope, tooling, quality gates, and
-processes relevant to quality assurance, and outlines a phased onboarding path
-with deliverables the team can use to produce a durable QA strategy.
+A minimum-viable QA plan scoped for **one person, on a personal computer,
+with no dev team to collaborate with**. The goal is not to cover the whole
+project — that is not feasible alone — but to produce useful quality
+signal on a small, well-chosen slice of Backstage with effort you can
+actually sustain.
 
-It is a contributor-authored reference and is not part of the official project
-documentation. Commands, paths, and counts reflect the state of the repository
-at the time of writing and should be re-verified during discovery.
-
----
-
-## 1. Purpose and Audience
-
-- **Audience**: QA engineers, SDETs, and test architects joining or auditing the
-  Backstage project.
-- **Purpose**: Provide a repeatable plan for discovering what is tested, how it
-  is tested, what is not covered, and where quality risks live.
-- **Outcomes**: By the end of discovery the team should be able to (a) run all
-  supported test suites locally, (b) explain the CI quality gates, (c) map test
-  coverage to product surface area, and (d) propose a QA strategy with gaps,
-  metrics, and owned deliverables.
+This is a contributor-authored reference, not official project
+documentation.
 
 ---
 
-## 2. Project Snapshot
+## 1. Reality Check
 
-Backstage is a TypeScript monorepo using Yarn workspaces. It is an open
-platform for building developer portals and is composed of a core framework,
-a backend system, and a large number of plugins.
+Backstage is huge: ~69 framework packages and ~150+ plugins. The CI
+infrastructure runs Jest, Playwright, Lighthouse, CodeQL, and database
+matrices across Linux and Windows. You cannot reproduce all of that
+alone, and you should not try.
 
-- **Packages** (framework core): ~69 under `/packages/*`
-- **Plugins**: ~150+ under `/plugins/*`
-- **Example apps**: `/packages/app` (new frontend system), `/packages/app-legacy`
-  (legacy frontend system), `/packages/backend`
-- **Docs**: `/docs` (user- and contributor-facing), `/microsite` (website)
-- **Monorepo tooling**: `backstage-cli` drives install, lint, test, build,
-  versioning, and publishing
-- **Release cadence**: Monthly main-line releases, weekly pre-release `next`
-  line (see `docs/overview/versioning-policy.md`)
+What a solo QA on a personal laptop **can** do:
 
-QA scope is therefore wide: the framework itself, each first-party plugin, the
-backend and frontend example apps, the CLI, the release pipeline, and the
-published documentation.
+- Run unit tests locally for a handful of packages.
+- Run the example app end to end and exercise it by hand.
+- Run a small number of Playwright E2E tests locally.
+- Read CI output on GitHub for everything else and rely on it as the
+  source of truth.
+- File clean, reproducible bug reports.
+- Keep a lightweight checklist per release.
 
----
+What you should **not** try to do solo:
 
-## 3. Surface Areas That Require QA
-
-| Surface | Location | Notes |
-|---|---|---|
-| Core frontend framework | `/packages/core-*`, `/packages/frontend-*` | New and legacy frontend systems must both be exercised |
-| Backend framework | `/packages/backend-*` | Uses `startTestBackend()` harness |
-| Example apps | `/packages/app`, `/packages/app-legacy`, `/packages/backend` | Primary E2E targets |
-| First-party plugins | `/plugins/*` | Catalog, Scaffolder, TechDocs, Search, Auth, Permission, Kubernetes, etc. |
-| CLI | `/packages/cli` | Affects every adopter's workflow |
-| Create templates | `yarn new` scaffolds | Tested indirectly via generation |
-| Docs site | `/docs`, `/microsite` | Broken-link and build checks in CI |
-| OpenAPI contracts | Various plugins | Breaking-change detection in CI |
+- Replicate the full Postgres / MySQL / Redis matrix.
+- Run E2E on Windows.
+- Build a coverage matrix across all 200+ plugins.
+- Design a team-wide flake policy.
+- Define metrics for other people to hit.
 
 ---
 
-## 4. Testing Stack
+## 2. Hardware and Environment Assumptions
 
-- **Unit / component tests**: Jest, driven by `backstage-cli repo test`, with
-  `NODE_OPTIONS='--no-node-snapshot --experimental-vm-modules'`.
-- **React component tests**: `@testing-library/react`, with lint rules
-  enforcing async queries and discouraging anti-patterns.
-- **Frontend test utilities**: `@backstage/test-utils` and
-  `@backstage/frontend-test-utils` (`renderInTestApp`, `TestApiProvider`,
-  `mockApis`).
-- **Backend test utilities**: `@backstage/backend-test-utils`
-  (`startTestBackend()`, `mockServices` for logger, config, auth, cache,
-  permission, database).
-- **E2E tests**: Playwright `@playwright/test`, driven by
-  `playwright.config.ts` at the repo root. Projects are auto-generated from
-  `@backstage/e2e-test-utils` by scanning for `e2e-tests` folders such as
-  `/packages/app/e2e-tests`.
-- **Database-backed tests**: Postgres, MySQL, and Redis are started as
-  services in CI. Connection strings are provided via
-  `BACKSTAGE_TEST_DATABASE_*` environment variables.
-- **Accessibility**: Lighthouse CI runs against Catalog, TechDocs, Scaffolder,
-  and Search in `.github/workflows/verify_accessibility.yml`, with config and
-  helper scripts under `.lighthouseci/`. Storybook uses
-  `@storybook/addon-a11y`.
-- **Security**: CodeQL scanning (`.github/workflows/verify_codeql.yml`) and
-  Snyk policies (`.snyk` files) per package. Process is described in
-  `SECURITY.md`.
+- One laptop / desktop. 16 GB RAM is comfortable; 8 GB will work but
+  Playwright + example app + backend + database is tight.
+- Docker Desktop (or Podman / Colima) for Postgres when needed.
+- Node 22.x or 24.x and Yarn (enabled via Corepack).
+- Enough disk for `node_modules` (several GB) and Playwright browsers.
 
-Jest is configured at the root `package.json` with
-`rejectFrontendNetworkRequests: true`, which blocks accidental network traffic
-from frontend tests — a useful invariant for QA to know about when triaging
-flakes.
+If your machine is small, skip Postgres entirely and use the default
+in-memory SQLite-based setup that the example app ships with.
 
 ---
 
-## 5. Quality Gates and CI
+## 3. The MVP Scope — Pick a Small Slice
 
-Primary workflows in `.github/workflows/`:
+Resist the urge to cover everything. Pick **three targets** and stick to
+them for the first couple of weeks:
 
-- **`ci.yml`** — main PR verification on Node 22.x and 24.x. Contains:
-  - `verify` — changesets, peer deps, type deps, API reports, TypeScript
-    fullcheck, catalog-info consistency, OpenAPI validation, doc link check,
-    plugin directory consistency.
-  - `test` — Jest suite with Postgres 18/14, MySQL 8, and Redis 7 service
-    containers; cache layers; optional coverage.
-- **`verify_e2e-linux.yml`** — Playwright E2E against a built example app
-  with Postgres.
-- **`verify_e2e-windows.yml`** — Windows-specific E2E parity.
-- **`verify_e2e-techdocs.yml`** — TechDocs end-to-end flow.
-- **`verify_accessibility.yml`** — Lighthouse CI.
-- **`verify_codeql.yml`** — CodeQL static analysis.
-- **`api-breaking-changes.yml`** — OpenAPI breaking-change gate.
-- **`deploy_packages.yml`** — publishes to npm on merges to master.
+1. **The example app** (`/packages/app` + `/packages/backend`) — the
+   smoke-test surface. If this is broken, everything is broken.
+2. **One tier-1 plugin** you actually care about. Reasonable choices:
+   - `plugins/catalog` — central to every Backstage install.
+   - `plugins/scaffolder` — user-visible, template-driven.
+   - `plugins/techdocs` — docs rendering.
+   - `plugins/search` — cross-cutting.
+   Pick one, not all.
+3. **The docs you are most likely to follow** — the "getting started"
+   path in `/docs/getting-started`.
 
-Local equivalents for the most important gates:
-
-| Gate | Local command |
-|---|---|
-| Lint | `yarn lint --fix` |
-| Formatting | `yarn prettier --write <paths>` |
-| Type check | `yarn tsc` (use `tsc:full` for declarations) |
-| Unit tests | `CI=1 yarn test <path>` |
-| All tests | `yarn test:all` |
-| E2E | `yarn test:e2e` |
-| API reports | `yarn build:api-reports` |
-| Changesets | files under `.changeset/` |
-
-Note: `yarn build`, `yarn changesets version`, and `yarn release` are reserved
-for release workflows and must not be run as part of development.
+Everything outside these three is out of scope for MVP. You can widen
+later.
 
 ---
 
-## 6. Release and QA Process
+## 4. Two-Week MVP
 
-Summarized from `docs/overview/versioning-policy.md` and `docs/publishing.md`:
+### Week 1 — Get it running and take a baseline
 
-1. Contributors add changesets under `.changeset/` describing user-facing
-   impact and bump level (patch / minor / major).
-2. A "Version Packages" PR is generated from accumulated changesets.
-3. Merging that PR to master triggers `deploy_packages.yml`, which publishes
-   to npm and posts to Discord.
-4. Main-line releases ship monthly (Tuesday before the third Wednesday);
-   `next` line ships weekly.
-5. Security fixes of high severity or above are backported for 6 months.
-6. Emergency patches are shipped through the `.patches/` mechanism.
+**Day 1 — Install**
+- `git clone` and `yarn install`.
+- `yarn start` — confirm frontend at `:3000` and backend at `:7007`.
+- Click through the default catalog, scaffolder, and techdocs pages.
+- Note anything broken; file one issue with a clean reproduction.
 
-The gate before a release is the green status of the CI workflows above plus
-human review under the rules in `REVIEWING.md` (formal Approve / Request
-Changes reviews, cross-area owner sign-off, 14-day stale rule).
+**Day 2 — Run the tests you care about**
+- `CI=1 yarn test packages/app` — example app unit tests.
+- `CI=1 yarn test plugins/<your-chosen-plugin>` — your one plugin.
+- `yarn tsc` — type check the repo.
+- `yarn lint` — lint the repo.
 
----
+Record: how long each took, whether anything failed locally that passes
+in CI.
 
-## 7. Risks and Known Quality Concerns
+**Day 3 — Run one E2E**
+- `yarn playwright install` once.
+- Run the example app's E2E: look under `/packages/app/e2e-tests`.
+- Goal is only to confirm Playwright works on your machine, not to run
+  the full suite.
 
-These are starting hypotheses for the QA team to validate during discovery,
-not confirmed findings:
+**Day 4 — Read CI on a recent PR**
+- On GitHub, open a recently merged PR.
+- Walk through each failed and passed check under Actions.
+- Skim `.github/workflows/ci.yml` and one `verify_e2e-*.yml`.
+- Write yourself a one-paragraph note: "these are the checks I trust CI
+  to run so I don't have to."
 
-- **Surface area vs. coverage**: With ~200+ publishable units, per-plugin test
-  depth is uneven. Coverage should be mapped per plugin.
-- **Legacy vs. new frontend system**: Both `/packages/app` and
-  `/packages/app-legacy` are maintained. E2E coverage across both should be
-  verified.
-- **E2E flake**: Playwright config uses `retries` in CI; a flake-rate metric
-  should be collected per project.
-- **Database matrix**: Postgres 14 and 18 plus MySQL 8 are exercised in CI;
-  local parity requires Docker and may hide environment-specific issues.
-- **Windows parity**: A dedicated Windows E2E workflow exists, implying
-  platform-specific risks worth monitoring.
-- **API / OpenAPI drift**: API reports and OpenAPI breaking-change detection
-  are automated but depend on reports being regenerated by contributors.
-- **Accessibility coverage**: Lighthouse runs on four plugins only. Other
-  plugins are not covered by automated a11y checks.
-- **Docs rot**: Broken link and doc-link checks are in CI, but content
-  accuracy of testing docs under `/docs` should be spot-checked.
+**Day 5 — Write your MVP test charter**
+- One page of plain text. Sections:
+  - What I test locally (example app smoke + one plugin's unit tests).
+  - What I trust CI for (everything else).
+  - What I skip (Windows, DB matrix, 200+ plugin coverage).
+  - How I file bugs (template + reproduction steps).
 
----
+### Week 2 — Start producing signal
 
-## 8. Discovery Plan — Phased
+**Day 6–7 — Exploratory testing on the example app**
+- Run `yarn start`.
+- Go through every top-level nav item. Try: empty states, long strings,
+  unicode, very wide/narrow viewports, keyboard-only navigation,
+  browser back/forward.
+- Log findings in a simple markdown file, one line per issue.
 
-### Phase 0 — Access and Environment (day 1)
-- Fork / clone the repo; install Node (22.x or 24.x) and Yarn.
-- Run `yarn install`.
-- Start the example app: `yarn start` (frontend at :3000, backend at :7007).
-- Install Docker; confirm Postgres / MySQL / Redis containers can be started
-  for database-backed tests.
-- Install Playwright browsers: `yarn playwright install`.
+**Day 8 — Pick one page for an accessibility pass**
+- Run the example app in Chrome, open DevTools → Lighthouse →
+  Accessibility on one page of your chosen plugin.
+- Compare with CI's Lighthouse report if available
+  (`.github/workflows/verify_accessibility.yml`).
+- Record the gap.
 
-**Deliverable**: Environment checklist committed to the QA team's workspace.
+**Day 9 — Write one new test**
+- Either a unit test for a bug you found, or a Playwright test for a
+  flow that wasn't covered.
+- Use `renderInTestApp` from `@backstage/test-utils` (frontend) or
+  `startTestBackend()` from `@backstage/backend-test-utils` (backend).
+- Don't aim for a great test — aim for one test that runs.
 
-### Phase 1 — Run the Suites (days 2–3)
-- Run targeted unit tests: `CI=1 yarn test packages/core-plugin-api`.
-- Run a plugin suite end-to-end: e.g. `CI=1 yarn test plugins/catalog`.
-- Run full local E2E: `yarn test:e2e`.
-- Run `yarn lint`, `yarn tsc`, `yarn build:api-reports` to understand
-  non-test gates.
-- Capture timings, failures, and flakes.
+**Day 10 — Consolidate**
+- Turn your findings into 1–3 GitHub issues using the templates in
+  `.github/ISSUE_TEMPLATE/`.
+- Write a short retro: what you learned, what was slower than expected,
+  what to cut from the plan.
 
-**Deliverable**: Baseline report of local run times and any local-only
-failures vs. CI.
-
-### Phase 2 — Read the Pipelines (days 3–5)
-- Walk through `.github/workflows/ci.yml`, `verify_e2e-*.yml`,
-  `verify_accessibility.yml`, and `api-breaking-changes.yml`.
-- For each, note: triggers, matrix, required services, failure modes,
-  retry behavior, and artifacts.
-- Map which workflow is the gate for which surface area.
-
-**Deliverable**: A one-page "CI gate map" diagram linking workflows to
-product areas.
-
-### Phase 3 — Map Coverage (week 2)
-- For each top-level plugin, record: presence of unit tests, presence of E2E
-  tests, presence of Storybook a11y, presence of OpenAPI contract.
-- Identify plugins with no or minimal tests.
-- Cross-reference with issue template traffic in `.github/ISSUE_TEMPLATE/`
-  and the public issue tracker to spot high-defect areas.
-
-**Deliverable**: Coverage matrix (plugin × test type) with risk scores.
-
-### Phase 4 — Study Test Utilities and Patterns (week 2)
-- Read `/docs/backend-system/building-plugins-and-modules/02-testing.md`,
-  `/docs/frontend-system/building-plugins/02-testing.md`, and
-  `/docs/plugins/testing.md`.
-- Inspect `packages/test-utils`, `packages/backend-test-utils`,
-  `packages/frontend-test-utils`, `packages/e2e-test-utils`.
-- Write one sample test using each harness to validate understanding.
-
-**Deliverable**: Internal "How to write a Backstage test" cheat sheet
-targeted at your team's conventions.
-
-### Phase 5 — Release and Process (week 3)
-- Read `CONTRIBUTING.md`, `REVIEWING.md`, `SECURITY.md`,
-  `docs/overview/versioning-policy.md`, `docs/publishing.md`.
-- Shadow one "Version Packages" PR from creation to publish.
-- Understand the changeset writing rules in `CONTRIBUTING.md` and practice by
-  drafting a changeset for a sample change.
-
-**Deliverable**: Release-cycle runbook with QA checkpoints annotated.
-
-### Phase 6 — Propose a QA Strategy (week 4)
-- Combine outputs into a strategy document covering:
-  - Test pyramid per surface (unit, integration, E2E, a11y, security).
-  - Gaps by plugin and by platform (Linux vs. Windows).
-  - Flake budget and quarantine policy.
-  - Metrics to publish (pass rate, flake rate, coverage, defect escape rate).
-  - QA tasks owned by the team vs. responsibilities shared with plugin
-    owners.
-
-**Deliverable**: QA strategy doc reviewed with maintainers.
+At the end of two weeks you should have: a working local environment, a
+written charter, an exploratory log, at least one issue filed, and
+ideally one test contributed or drafted.
 
 ---
 
-## 9. Metrics to Establish Early
+## 5. Sustainable Weekly Rhythm After MVP
 
-- **CI pass rate** per workflow over a rolling 7- and 30-day window.
-- **E2E flake rate** per Playwright project.
-- **Test duration** per workflow and per package.
-- **Coverage** (Jest `--coverage`) reported per package; trend over time.
-- **Open defect count** by plugin, tagged from GitHub issues.
-- **Time to fix** for regressions introduced between releases.
-- **A11y scores** from Lighthouse CI on gated plugins.
+Once the two-week MVP is done, keep it small — pick one of these per
+week:
 
----
+- One hour of exploratory testing on the example app against the latest
+  `master`.
+- Run your chosen plugin's unit tests against `master`; file an issue
+  if anything regresses.
+- Add one new test to your chosen plugin.
+- Read the changesets under `.changeset/` for the upcoming release and
+  spot-check one user-facing change.
+- Re-run the Lighthouse check on one page and compare with last week.
 
-## 10. Key References
-
-- `CONTRIBUTING.md` — setup, test commands, changeset rules.
-- `REVIEWING.md` — review requirements and gates.
-- `STYLE.md` — code style.
-- `SECURITY.md` — security reporting process.
-- `docs/overview/versioning-policy.md` — release lines and SemVer rules.
-- `docs/publishing.md` — release mechanics.
-- `docs/plugins/testing.md` — plugin test guidance.
-- `docs/backend-system/building-plugins-and-modules/02-testing.md` — backend
-  testing.
-- `docs/frontend-system/building-plugins/02-testing.md` — frontend testing.
-- `playwright.config.ts` — E2E configuration.
-- `.github/workflows/` — all CI gates.
-- `.github/ISSUE_TEMPLATE/` — bug, docs, feature, maintenance templates.
+Resist adding a second plugin until you are genuinely bored with the
+first.
 
 ---
 
-## 11. Open Questions for Maintainers
+## 6. What to Cut When Time Is Short
 
-The QA team should bring these to a maintainer sync early in discovery:
+In priority order, cut from the bottom:
 
-1. Is there an official coverage target per package, or is coverage only
-   informational?
-2. Which plugins are considered "tier 1" and therefore must have E2E and a11y
-   coverage?
-3. What is the accepted flake rate for Playwright E2E before a test is
-   quarantined?
-4. Who owns cross-plugin regression testing during the monthly release
-   freeze?
-5. Are there plans to extend accessibility automation beyond the four
-   plugins currently covered by Lighthouse CI?
-6. How should external QA findings (performance, security, accessibility) be
-   filed — issue templates, security advisories, or elsewhere?
+1. Always keep: **example app smoke test** (`yarn start`, click around).
+2. Keep if you can: **unit tests on your one chosen plugin**.
+3. Keep if you can: **one Playwright run per week**.
+4. Drop first: accessibility checks.
+5. Drop next: adding new tests.
+6. Drop last: reading CI output on other people's PRs.
+
+If you only ever have 30 minutes, spend them on item 1.
+
+---
+
+## 7. Commands Cheat Sheet
+
+```bash
+# Install
+yarn install
+
+# Start example app (frontend :3000, backend :7007)
+yarn start
+
+# Unit tests for one path
+CI=1 yarn test packages/app
+CI=1 yarn test plugins/catalog
+
+# Type check and lint
+yarn tsc
+yarn lint
+
+# Playwright
+yarn playwright install
+yarn test:e2e
+
+# Format code you changed
+yarn prettier --write <paths>
+```
+
+Do **not** run `yarn build`, `yarn changesets version`, or `yarn release`
+— those are reserved for the release pipeline.
+
+---
+
+## 8. How to File a Useful Bug (Solo Edition)
+
+Without a dev team to triage, your issues compete for attention with
+everyone else's. Raise the signal-to-noise ratio:
+
+- Use the bug template at `.github/ISSUE_TEMPLATE/01_bug.yaml`.
+- State Backstage commit SHA and Node version.
+- Steps must be runnable from a fresh clone with `yarn install && yarn start`.
+- Include exact error text, not a paraphrase.
+- Screenshot or short screen recording if the bug is visual.
+- One bug per issue. Don't batch.
+
+If you can include a failing test, even a draft one, do it — that is
+often the difference between "confirmed" and "closed as can't
+reproduce".
+
+---
+
+## 9. Things You Can Safely Ignore as a Solo QA
+
+- The Windows E2E workflow — you are on one machine.
+- The Postgres 14 and 18 + MySQL 8 + Redis matrix — CI has it.
+- Cross-plugin regression testing — out of scope solo.
+- API reports (`yarn build:api-reports`) unless you are changing APIs.
+- The legacy frontend system (`/packages/app-legacy`) unless your chosen
+  plugin has a legacy variant you actually use.
+- Performance benchmarking — no baseline, no signal.
+
+---
+
+## 10. Success Criteria for the MVP
+
+You are done with MVP when all of the following are true:
+
+- You can go from cold laptop to a running example app in under 15
+  minutes.
+- You have run at least one unit test and one Playwright test locally
+  and seen them pass.
+- You have a written, one-page charter describing what you test and
+  what you skip.
+- You have filed at least one well-reproduced issue, or drafted one
+  test.
+- You know where to find CI results on GitHub and trust them for
+  everything you don't test locally.
+
+That's it. Anything beyond this is bonus.
