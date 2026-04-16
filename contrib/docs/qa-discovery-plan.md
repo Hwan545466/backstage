@@ -88,7 +88,7 @@ Wait 5–15 minutes. Success looks like:
 
 ```bash
 cd ~/work/my-backstage
-yarn dev
+yarn start
 ```
 
 First compile takes 2–5 minutes. Wait for both:
@@ -122,7 +122,7 @@ git commit -m "feat: scaffold backstage app (baseline)"
 
 - [ ] **Step 2.1: Stop Backstage**
 
-`Ctrl+C` in the `yarn dev` terminal.
+`Ctrl+C` in the `yarn start` terminal.
 
 - [ ] **Step 2.2: Add API entity to entities.yaml**
 
@@ -166,7 +166,7 @@ If missing, add it. The path is relative to `packages/backend/`.
 - [ ] **Step 2.4: Restart and verify**
 
 ```bash
-yarn dev
+yarn start
 ```
 
 Wait for "webpack compiled successfully". Open `http://localhost:3000`. Click **APIs** in the sidebar. You should see `petstore`. Click it — the API docs tab should render Petstore endpoints (GET /pet/{petId}, POST /pet, etc.).
@@ -226,7 +226,7 @@ proxy:
 ```bash
 export OLLAMA_CLOUD_URL=https://your-ollama-cloud-host
 export OLLAMA_CLOUD_API_KEY=your-api-key-here
-yarn dev
+yarn start
 ```
 
 To avoid re-exporting every session, add both lines to your shell profile (`~/.zshrc` or `~/.bashrc`).
@@ -266,7 +266,7 @@ git commit -m "feat: add ollama cloud proxy endpoint"
 
 - [ ] **Step 4.1: Stop Backstage and scaffold the module**
 
-`Ctrl+C` in the `yarn dev` terminal, then:
+`Ctrl+C` in the `yarn start` terminal, then:
 
 ```bash
 cd ~/work/my-backstage
@@ -608,7 +608,7 @@ Add to the `catalog.locations` list:
 cd ~/work/my-backstage
 export OLLAMA_CLOUD_URL=https://your-ollama-cloud-host
 export OLLAMA_CLOUD_API_KEY=your-api-key-here
-yarn dev
+yarn start
 ```
 
 Open `http://localhost:3000` → **Create**. You should see **Generate API Tests (Ollama Cloud)** in the list.
