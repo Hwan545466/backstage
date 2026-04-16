@@ -396,7 +396,8 @@ export const createOllamaTestGenAction = () => {
         `Calling Ollama Cloud: ${ollamaUrl}/v1/chat/completions (model: ${model})`,
       );
 
-      const res = await fetch(`${ollamaUrl}/v1/chat/completions`, {
+      // Ollama Cloud: model must include :cloud suffix (e.g. kimi-k2.5:cloud)
+      const res = await fetch(`${ollamaUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -405,7 +406,6 @@ export const createOllamaTestGenAction = () => {
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1,
           stream: false,
         }),
       });
@@ -415,10 +415,10 @@ export const createOllamaTestGenAction = () => {
       }
 
       const data = (await res.json()) as {
-        choices: Array<{ message: { content: string } }>;
+        message: { content: string };
       };
 
-      const raw = data.choices[0]?.message?.content;
+      const raw = data.message?.content;
       if (!raw) {
         throw new Error(
           'Ollama Cloud returned an empty response. Try a different model or reduce spec size.',
