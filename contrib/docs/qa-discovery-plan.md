@@ -365,3 +365,275 @@ Forewarned:
 - Backstage example entities: `examples/entities.yaml` in this repo.
 - Anthropic API docs — for wiring Claude into a custom action.
 - OpenAI API docs — alternative backend for a custom action.
+
+---
+
+## Appendix A — Ollama Integration
+
+Ollama gives you local or cloud LLM inference with an
+OpenAI-compatible API. This appendix shows three ways to wire it
+into your Backstage app, from simplest to most integrated.
+
+### A.1 Ollama Basics
+
+- **Local**: install Ollama, `ollama pull llama3`, runs at
+  `http://localhost:11434`.
+- **Ollama Cloud**: hosted endpoint (e.g.
+  `https://ollama.example.com`), same API shape.
+- **API shape**: POST `/api/generate` (streaming) or POST
+  `/api/chat` (chat completions). Also exposes an
+  OpenAI-compatible endpoint at `/v1/chat/completions`.
+
+### A.2 Option 1 — Backstage Proxy (5-minute setup)
+
+The proxy backend plugin (`@backstage/plugin-proxy-backend`,
+source at `plugins/proxy-backend/`) forwards requests from
+the Backstage frontend to an external target. Add this to your
+`app-config.yaml`:
+
+```yaml
+proxy:
+  endpoints:
+    /ollama:
+      target: http://localhost:11434   # or your cloud URL
+      credentials: dangerously-allow-unauthenticated
+      allowedMethods: ['POST', 'GET']
+      allowedHeaders: ['Content-Type']
+```
+
+Then from any frontend plugin or a simple fetch in the browser
+console:
+
+```ts
+const response = await fetch('/api/proxy/ollama/api/generate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    model: 'llama3',
+    prompt: 'Generate a Playwright test for the GET /pets endpoint',
+    stream: false,
+  }),
+});
+const data = await response.json();
+console.log(data.response);
+```
+
+This is the fastest way to get AI responses flowing through
+Backstage. No custom plugins needed.
+
+For full proxy configuration options see
+`docs/plugins/proxying.md` and `plugins/proxy-backend/config.d.ts`.
+
+### A.3 Option 2 — Custom Scaffolder Action (recommended for test generation)
+
+This is the best fit for the "generate API tests" goal. You
+create a Scaffolder template with a form (pick a model, pick an
+API entity, pick a test framework), and a backend action that
+calls Ollama and writes the generated files.
+
+**Step 1 — Scaffold the module**
+
+```bash
+cd my-backstage
+yarn backstage-cli new    # select "scaffolder-backend-module"
+```
+
+**Step 2 — Write the action**
+
+Inside the generated module, create the action:
+
+```ts
+// plugins/scaffolder-backend-module-ollama/src/actions/generate-tests.ts
+import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
+import fs from 'fs';
+import path from 'path';
+
+export const createOllamaTestGenAction = () => {
+  return createTemplateAction({
+    id: 'ollama:generate-api-tests',
+    description: 'Generate API automation tests using Ollama',
+    schema: {
+      input: {
+        type: 'object' as const,
+        required: ['model', 'openApiSpec', 'testFramework'],
+        properties: {
+          model: {
+            type: 'string' as const,
+            title: 'Ollama model',
+            description: 'e.g. llama3, codellama, mistral',
+          },
+          openApiSpec: {
+            type: 'string' as const,
+            title: 'OpenAPI spec (JSON or YAML)',
+          },
+          testFramework: {
+            type: 'string' as const,
+            title: 'Test framework',
+            enum: ['playwright', 'jest-supertest', 'pytest'],
+          },
+        },
+      },
+    },
+    async handler(ctx) {
+      const { model, openApiSpec, testFramework } = ctx.input;
+
+      const prompt = [
+        `Given this OpenAPI spec, generate a ${testFramework} test suite.`,
+        `Cover: happy path for every endpoint, 400/401/404 error cases,`,
+        `and response schema assertions.`,
+        `Output only the test code, no explanations.`,
+        `\n\n${openApiSpec}`,
+      ].join(' ');
+
+      const res = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, stream: false }),
+      });
+
+      const data = await res.json();
+      const outputFile = path.join(ctx.workspacePath, 'generated-tests.ts');
+      fs.writeFileSync(outputFile, data.response);
+
+      ctx.logger.info(`Tests written to ${outputFile}`);
+    },
+  });
+};
+```
+
+**Step 3 — Register the action** in your backend
+(`packages/backend/src/index.ts`) by adding the module.
+
+**Step 4 — Write the Scaffolder template**
+
+```yaml
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: generate-api-tests
+  title: Generate API Tests (Ollama)
+  description: Use a local LLM to generate API automation tests
+spec:
+  owner: qa
+  type: qa-tool
+
+  parameters:
+    - title: Configuration
+      required:
+        - model
+        - testFramework
+        - apiSpec
+      properties:
+        model:
+          title: Ollama Model
+          type: string
+          enum:
+            - llama3
+            - codellama
+            - mistral
+            - deepseek-coder
+          default: llama3
+        testFramework:
+          title: Test Framework
+          type: string
+          enum:
+            - playwright
+            - jest-supertest
+            - pytest
+          default: playwright
+        apiSpec:
+          title: OpenAPI Spec
+          type: string
+          ui:widget: textarea
+          ui:options:
+            rows: 15
+
+  steps:
+    - id: generate
+      name: Generate tests via Ollama
+      action: ollama:generate-api-tests
+      input:
+        model: ${{ parameters.model }}
+        openApiSpec: ${{ parameters.apiSpec }}
+        testFramework: ${{ parameters.testFramework }}
+
+  output:
+    text:
+      - title: Done
+        content: |
+          Tests generated. Check the workspace output.
+```
+
+This gives you a form in the Backstage UI: pick a model from a
+dropdown, paste (or pipe) the OpenAPI spec, pick a test
+framework, and click Create. The backend calls Ollama and writes
+the test file.
+
+### A.4 Option 3 — OpenAI-Compatible SDK via Ollama
+
+Ollama exposes `/v1/chat/completions` which is wire-compatible
+with the OpenAI SDK. If you prefer to use the `openai` npm
+package (e.g., for a community plugin that expects it):
+
+```ts
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  baseURL: 'http://localhost:11434/v1', // Ollama's OpenAI compat
+  apiKey: 'ollama',                     // required but ignored
+});
+
+const completion = await client.chat.completions.create({
+  model: 'llama3',
+  messages: [
+    { role: 'user', content: 'Generate a test for GET /pets' },
+  ],
+});
+
+console.log(completion.choices[0].message.content);
+```
+
+This means any Backstage community plugin built for OpenAI will
+work with Ollama by changing `baseURL` and `apiKey` in its
+config. No code changes needed.
+
+### A.5 Ollama + MCP Actions Backend (bonus)
+
+Backstage has an MCP Actions Backend plugin
+(`plugins/mcp-actions-backend/`) that exposes Backstage actions
+as MCP tools. If you use Claude Desktop, Cursor, or another MCP
+client, you can connect it to your Backstage instance and have
+the AI assistant call catalog and scaffolder actions directly.
+
+This is the most advanced integration and is not required for the
+MVP. Explore it once Options A/B are working. See
+`docs/ai/mcp-actions.md` for setup.
+
+### A.6 Which Ollama Models to Try
+
+For code generation, start with these (in rough quality order):
+
+| Model | Size | Good for |
+|---|---|---|
+| `deepseek-coder` | 6.7B | Best code quality at small size |
+| `codellama` | 7B–34B | Code-focused Llama variant |
+| `llama3` | 8B–70B | General purpose, good reasoning |
+| `mistral` | 7B | Fast, decent code output |
+
+On 8 GB RAM, stick to 7B models. On 16 GB, you can try 13B.
+The 70B models need 40+ GB RAM or a GPU — skip them on a
+laptop.
+
+### A.7 When to Use Ollama vs. a Cloud AI
+
+| Use Ollama (local) when | Use cloud AI (Claude/GPT) when |
+|---|---|
+| You want free, unlimited calls | You need the best output quality |
+| You have no internet or API keys | Spec is large (>4K tokens) |
+| Latency doesn't matter (7B is slow) | You want streaming chat UX |
+| Privacy matters (spec stays local) | You need function calling / tool use |
+
+For MVP: use cloud AI manually (Option A in §4) to get good
+baseline tests, then try Ollama locally to see if the quality is
+sufficient for your APIs. If it is, switch to Ollama to save
+costs.
