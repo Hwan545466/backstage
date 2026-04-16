@@ -333,7 +333,7 @@ export const createOllamaTestGenAction = () => {
           model: {
             type: 'string',
             title: 'Ollama model',
-            default: 'deepseek-coder',
+            default: 'minimax-m2.7:cloud',
           },
           openApiSpec: {
             type: 'string',
@@ -361,7 +361,7 @@ export const createOllamaTestGenAction = () => {
 
     async handler(ctx) {
       const {
-        model = 'deepseek-coder',
+        model = 'minimax-m2.7:cloud',
         openApiSpec,
         apiBaseUrl,
         outputFileName = 'generated-tests.spec.ts',
@@ -550,8 +550,8 @@ spec:
             - codellama
             - llama3
             - mistral
-          default: deepseek-coder
-          description: 'deepseek-coder gives best results for API test code'
+          default: minimax-m2.7:cloud
+          description: 'minimax-m2.7:cloud is the configured model (include :cloud suffix for all Ollama Cloud models) for API test code'
 
     - title: OpenAPI Spec
       required:
