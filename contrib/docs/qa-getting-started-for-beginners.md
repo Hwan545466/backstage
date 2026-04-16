@@ -1,64 +1,63 @@
 # Backstage + AI Test Generation — A Beginner's Walkthrough
 
-**Who this is for**: you have never set up Backstage before, you are
-the only person doing this, and you want someone to walk you through
-every step with no assumed knowledge.
+**Who this is for**: first-time Backstage user, working alone, wants
+every step spelled out.
 
 **What you will have at the end**: Backstage running on your laptop,
-one real API registered in its catalog, and an AI-generated test
-suite that actually runs against that API.
+one real API in its catalog, and an AI-generated test suite that
+actually runs.
 
-**Time needed**: 3–4 hours the first time, mostly waiting for
-downloads. You can split it across two evenings.
+**Time**: 3–4 hours split across 2–3 sessions.
 
-This is the hand-holdy companion to `qa-discovery-plan.md`. That doc
-is the strategy. This doc is the button-pressing.
-
----
-
-## Part 0 — Words You'll See (Quick Glossary)
-
-Don't memorize. Refer back when you hit a term.
-
-- **Backstage** — a piece of software that gives you a website
-  (called a "portal") listing all your APIs, services, docs, etc.
-  Originally built at Spotify. You run it on your own computer.
-- **Catalog** — the database inside Backstage that lists your stuff.
-  Each item in it is called an "entity".
-- **Entity** — one thing in the catalog. Could be a service, an API,
-  a person, a team. Defined in YAML.
-- **API entity** — a catalog entry that represents an API, usually
-  with a link to its OpenAPI spec.
-- **OpenAPI spec** — a JSON or YAML file that describes an HTTP API:
-  its endpoints, methods, inputs, outputs. Sometimes called
-  "Swagger".
-- **Plugin** — a piece of Backstage that adds a feature. Example:
-  the "Scaffolder" plugin, the "TechDocs" plugin.
-- **Scaffolder** — Backstage's built-in form-based code generator.
-  You fill in a form, it runs steps, it writes files.
-- **Scaffolder template** — a YAML file that defines one form + the
-  steps to run.
-- **Ollama** — free software that runs AI models on your laptop. Or
-  a cloud service with the same interface.
-- **Node.js / Yarn** — the tools that run JavaScript on your
-  computer. Backstage is written in JavaScript, so you need these.
-- **Terminal** — the black window where you type commands. On Mac
-  it's "Terminal.app". On Windows it's "PowerShell" or "Windows
-  Terminal". On Linux it's whatever you already have.
-- **yarn dev / yarn start** — the command that starts Backstage
-  running on your computer.
-- **localhost:3000** — an address that means "the website running on
-  my own computer, on port 3000". Paste it into your browser.
+**Companion docs** (in this folder, open as needed):
+- `qa-glossary.md` — plain-English definitions of every term.
+- `qa-troubleshooting.md` — fixes for errors you'll hit.
+- `qa-discovery-plan.md` — the strategy behind all this.
+- `qa-claude-code-kickoff.md` — prompts to paste when you start Claude Code.
 
 ---
 
-## Part 1 — Prep Your Laptop
+## Progress Checklist
 
-You do this once. It takes 20–40 minutes.
+Mark these off as you go. Each session is a natural stopping point.
 
-### 1.1 Check what you have
+**Session 1 — One-time laptop setup** (20–40 min, once)
+- [ ] 1.1 Check Node, Yarn, git versions
+- [ ] 1.2 Install Node if needed
+- [ ] 1.3 Enable Yarn via Corepack
+- [ ] 1.4 (Optional) Install Ollama and pull a model
 
-Open a terminal and type each of these, pressing Enter after each:
+⏸ *Break point — come back next session*
+
+**Session 2 — Get Backstage running with one API** (60–90 min)
+- [ ] 2.1 Pick a folder and scaffold a Backstage app
+- [ ] 2.2 Start it with `yarn dev`
+- [ ] 2.3 Open it in a browser, sign in as guest
+- [ ] 3.1 Pick an OpenAPI spec (Petstore recommended)
+- [ ] 3.2 Add an API entity to `examples/entities.yaml`
+- [ ] 3.3 Restart, verify the API shows in the UI
+
+⏸ *Break point — good place to stop for the day*
+
+**Session 3 — Generate and run your first AI test** (45–90 min)
+- [ ] 4.1 Copy the OpenAPI spec
+- [ ] 4.2 Prompt an AI to generate tests
+- [ ] 4.3 Save the test file
+- [ ] 4.4 Install Playwright
+- [ ] 4.5 Run the test
+- [ ] 5.1 Save your prompt and loop as a README
+
+✅ **MVP complete.** Come back for Part 6 when you want to level up.
+
+---
+
+# Session 1 — Prep Your Laptop
+
+Do this once. ~20–40 min depending on what you have installed.
+
+## 1.1 Check what you have
+
+Open a terminal and run each:
 
 ```
 node --version
@@ -66,157 +65,117 @@ yarn --version
 git --version
 ```
 
-- If `node --version` shows `v22.x.x` or `v24.x.x`, you're good.
-- If it says "command not found" or shows `v18` or lower, install
-  Node (next step).
-- If `yarn` says "command not found", you'll fix it in step 1.3.
-- If `git` is missing, install git — on Mac `brew install git`, on
-  Windows download from git-scm.com, on Linux `sudo apt install git`.
+**Expected**:
+- `node` → `v22.x` or `v24.x`. Older is a problem.
+- `yarn` → any version, or "not found" (we'll fix).
+- `git` → any version.
 
-### 1.2 Install Node.js (if needed)
+Anything missing → see next steps. Any of these errors → check
+`qa-troubleshooting.md`.
 
-Easiest way: go to https://nodejs.org and download the LTS version
-(the bigger green button). Run the installer. Click Next a few times.
+## 1.2 Install Node.js (if needed)
 
-When it's done, **close your terminal and open a new one**, then
-retry `node --version`. You should see something like `v22.11.0`.
+- Go to https://nodejs.org.
+- Download LTS (the bigger green button).
+- Run the installer, click Next a few times.
+- **Close your terminal, open a new one.**
+- Re-run `node --version`.
 
-### 1.3 Enable Yarn
-
-In your terminal, run:
+## 1.3 Enable Yarn
 
 ```
 corepack enable
 ```
 
-That's it. `yarn --version` should now work. If it prints a number
-like `3.x.x` or `4.x.x`, you're done.
+That's it. `yarn --version` should now work.
 
-If `corepack` is not found, run `npm install -g corepack` first,
-then `corepack enable`.
+## 1.4 Install Ollama (optional)
 
-### 1.4 Install Ollama (optional but useful)
+Only if you want **free, local** AI generation. If you plan to use
+Claude/ChatGPT in your browser instead, skip this.
 
-If you want to run AI models **on your own laptop** for free:
-
-- Go to https://ollama.com and download the installer for your OS.
-- Run it. It installs a little menu-bar app.
-- Open a terminal and run:
+- Download from https://ollama.com, run the installer.
+- Open a new terminal and run:
 
 ```
 ollama pull llama3
 ```
 
-This downloads a 4–5 GB AI model. Go make coffee.
+(Downloads 4–5 GB. Go make coffee.)
 
-When it finishes, test it:
+- Test:
 
 ```
 ollama run llama3 "hello"
 ```
 
-You should see it reply. Press `Ctrl+D` to exit.
+Press `Ctrl+D` to exit.
 
-If you'd rather skip Ollama and use Claude/ChatGPT in your browser,
-that's fine — Part 4 below walks through both paths.
+**Low on RAM (8 GB)?** Use `ollama pull phi3:mini` instead — much
+smaller.
+
+⏸ *Session 1 done. Next time you open Claude Code, say you
+finished Session 1 and want Session 2.*
 
 ---
 
-## Part 2 — Create Your Own Backstage App
+# Session 2 — Create Your Backstage App and Add One API
 
-You will **not** be working inside the `/home/user/backstage` folder
-(that's the Backstage source code). You'll create your own app
-elsewhere.
+## 2.1 Scaffold the app
 
-### 2.1 Pick a folder
-
-Pick somewhere on your laptop — Desktop, Documents, whatever. In
-your terminal, navigate there:
+**Important**: do this **outside** any existing Backstage source
+folder. Pick a fresh location like your Desktop.
 
 ```
 cd ~/Desktop
-```
-
-(On Windows PowerShell: `cd $env:USERPROFILE\Desktop`.)
-
-### 2.2 Run the creator
-
-Copy-paste this **exactly**:
-
-```
 npx @backstage/create-app@latest
 ```
 
-It will:
+When prompted:
+- Install `create-app`? → `y`
+- App name? → `my-backstage` (or whatever you want)
 
-1. Ask you to confirm installing `create-app`. Press `y` and Enter.
-2. Ask you for a name. Type something like `my-backstage` and press
-   Enter.
-3. Download a lot of stuff. This takes 5–15 minutes. You'll see
-   many log lines. That's normal.
+Wait 5–15 minutes. Lots of download output is normal.
 
-When it's done you'll see a message like:
+**Success looks like**: `✅ Successfully created my-backstage`
 
-> ✅ Successfully created my-backstage
-
-There is now a folder called `my-backstage` on your Desktop.
-
-### 2.3 Start it up
+## 2.2 Start it
 
 ```
 cd my-backstage
 yarn dev
 ```
 
-This takes 2–5 minutes the first time (it's compiling). You'll see
-many lines scroll by. Watch for:
-
-> [0] webpack compiled successfully
-> [1] Listening on :7007
-
-That means: the website is running at `http://localhost:3000` and
-the backend is running at `http://localhost:7007`.
-
-### 2.4 Open it
-
-In your browser, go to:
+First run compiles — takes 2–5 minutes. Watch for these two lines:
 
 ```
-http://localhost:3000
+[0] webpack compiled successfully
+[1] Listening on :7007
 ```
 
-You should see the Backstage home page. Click "Guest" to sign in
-(it's a yellow button). You're in.
+Both = success.
 
-Click around: "Home", "Catalog", "APIs", "Docs", "Create...". Most
-pages will show example entries.
+## 2.3 Open it
 
-**If this step fails**: see Part 7 (troubleshooting).
+In your browser: `http://localhost:3000`
 
-Leave it running. To stop it later, go to the terminal and press
-`Ctrl+C`.
+Click the yellow **Guest** button to sign in. Click around the
+sidebar: Home, Catalog, APIs, Docs, Create…
 
----
+Leave `yarn dev` running. `Ctrl+C` stops it when needed.
 
-## Part 3 — Put One Real API into the Catalog
+## 3.1 Pick an OpenAPI spec
 
-Right now the catalog shows example services. Let's add a real one.
-
-### 3.1 Find an OpenAPI spec
-
-Easiest: use the public Swagger Petstore spec. URL:
+Easy starter: Swagger Petstore —
 `https://petstore3.swagger.io/api/v3/openapi.json`
 
-If you have your own API spec, even better. Save it as a `.yaml` or
-`.json` file you can refer to.
+If you have your own spec, use that instead.
 
-### 3.2 Create a catalog YAML file
+## 3.2 Add the API to the catalog
 
-**Stop Backstage first** (`Ctrl+C` in the terminal running it).
+**Stop Backstage** (`Ctrl+C` in its terminal).
 
-In your `my-backstage` folder, find the `examples` subfolder. Open
-`examples/entities.yaml` in a text editor (VS Code, Notepad++,
-anything).
+Open `my-backstage/examples/entities.yaml` in a text editor.
 
 At the bottom of the file, add:
 
@@ -238,47 +197,44 @@ spec:
     $text: https://petstore3.swagger.io/api/v3/openapi.json
 ```
 
-Save the file.
+Save. **YAML is picky** — no tabs, only spaces, indent by 2.
 
-### 3.3 Start Backstage again
+## 3.3 Restart and verify
 
 ```
 yarn dev
 ```
 
-Wait for "webpack compiled successfully" again. Refresh your browser.
+Wait for "webpack compiled successfully". Refresh your browser.
 
-### 3.4 Find your API
+Click **APIs** in the sidebar → you should see `petstore`. Click it
+→ you should see every endpoint rendered (GET /pet, POST /pet, etc).
 
-In the Backstage sidebar click "APIs". You should see "petstore" in
-the list. Click it. You'll see the API spec rendered with every
-endpoint, request body, response schema, etc.
+**If it didn't appear**: check `qa-troubleshooting.md` → "Catalog"
+section.
 
-**If petstore doesn't appear**: check the terminal for YAML errors.
-Most common: wrong indentation (YAML wants spaces, not tabs).
+⏸ *Session 2 done. This is a great place to commit/take a break.
+Next session we generate your first AI test.*
 
 ---
 
-## Part 4 — Generate Your First AI Test (Manual, No Plugin)
+# Session 3 — Generate and Run Your First AI Test
 
-This is the **Option A** path from the strategy doc. Simplest,
-works today, no plugin development.
+This is **Option A** from the strategy doc: manual copy-paste, no
+plugin development. Get this working first.
 
-### 4.1 Copy the OpenAPI spec
+## 4.1 Copy the OpenAPI spec
 
-Open the raw URL in a new tab:
-`https://petstore3.swagger.io/api/v3/openapi.json`
+Open `https://petstore3.swagger.io/api/v3/openapi.json` in a new
+browser tab. `Ctrl+A`, `Ctrl+C`.
 
-Select all (`Ctrl+A` / `Cmd+A`), copy.
+## 4.2 Prompt an AI
 
-### 4.2 Ask an AI to generate tests
+Pick one:
 
-Pick your AI:
+### 4.2a — Claude or ChatGPT (recommended)
 
-**Option 4.2a — Claude / ChatGPT in your browser (easiest)**
-
-Open Claude (https://claude.ai) or ChatGPT (https://chat.openai.com).
-Paste this prompt:
+Open https://claude.ai or https://chat.openai.com. Paste:
 
 > I'm going to give you an OpenAPI spec. Generate a Playwright API
 > test suite in TypeScript that:
@@ -286,47 +242,37 @@ Paste this prompt:
 > - Tests one 400 error case and one 404 error case
 > - Uses `@playwright/test` and `request.newContext()`
 > - Uses `https://petstore3.swagger.io/api/v3` as the base URL
-> - Outputs one single .ts file
+> - Outputs ONE single .ts file with no explanations
 >
 > Here is the spec:
 >
-> [paste the OpenAPI spec here]
+> [paste the spec]
 
-Press Enter. Wait for the response. Copy the code it gives you.
+Wait for the response. Copy the code.
 
-**Option 4.2b — Ollama on your laptop**
+### 4.2b — Local Ollama (free but slower)
 
-In a new terminal (leave Backstage running in the other one):
+In a new terminal:
 
 ```
 ollama run codellama "generate a Playwright TypeScript test suite for the Petstore API at https://petstore3.swagger.io/api/v3. Cover GET /pet/{petId}, POST /pet, and one 404 case. Output only code."
 ```
 
-It will print the code directly. Copy it.
+Quality will be lower than Claude/GPT — good enough for practice.
 
-Note: local Ollama on 8 GB RAM is slow (30–90 seconds per
-response) and lower quality than cloud AI. For your first test, use
-the browser AI. Come back to Ollama once you want privacy or want to
-stop paying.
-
-### 4.3 Save the test file
-
-Make a new folder **outside** `my-backstage`:
+## 4.3 Save the test file
 
 ```
 cd ~/Desktop
-mkdir qa-tests
-cd qa-tests
-mkdir petstore
-cd petstore
+mkdir -p qa-tests/petstore
+cd qa-tests/petstore
 ```
 
-Open a text editor in that folder. Create a file called
-`petstore.spec.ts` and paste the code the AI gave you.
+Create a file `petstore.spec.ts` and paste the AI's code into it.
 
-### 4.4 Install Playwright
+## 4.4 Install Playwright
 
-Still inside `~/Desktop/qa-tests/petstore`:
+Still in `qa-tests/petstore`:
 
 ```
 npm init -y
@@ -334,37 +280,24 @@ npm install -D @playwright/test
 npx playwright install chromium
 ```
 
-Wait for it to finish (couple minutes).
-
-### 4.5 Run the test
+## 4.5 Run it
 
 ```
 npx playwright test
 ```
 
-You should see test results — some passing, maybe some failing.
-**Both outcomes are fine for now.** You have an end-to-end loop:
-Backstage → OpenAPI spec → AI → Test code → Real HTTP calls →
-Results.
+You'll see test results. **Some passing, some failing is fine.**
+You now have the full loop working end to end.
 
-### 4.6 If tests fail, that's interesting
+**If tests fail**: common causes —
+- AI invented an endpoint → fix prompt, regenerate.
+- API changed → real QA finding.
+- Rate-limited → slow down or add delays.
+- Assertions are wrong → fix manually or regenerate.
 
-Failures usually mean one of:
+This **is** the QA work.
 
-- The AI invented an endpoint or field (most common). Fix the
-  prompt and regenerate.
-- The API changed since the spec was written (bug!).
-- The test has bad assertions. Fix manually or regenerate.
-- You're being rate-limited. Slow down or add delays.
-
-This *is* the QA work. Welcome.
-
----
-
-## Part 5 — Save Your Working Loop
-
-You now have a 6-step loop. Write it down in a file so future-you
-doesn't forget:
+## 5.1 Save your loop
 
 Create `~/Desktop/qa-tests/README.md`:
 
@@ -373,37 +306,41 @@ Create `~/Desktop/qa-tests/README.md`:
 
 1. Open Backstage → APIs tab.
 2. Pick an API entity.
-3. Copy its OpenAPI spec URL or content.
-4. Paste into Claude/ChatGPT with the prompt from prompts/api-tests.md.
-5. Save the response to qa-tests/<api-name>/.
+3. Copy the OpenAPI spec.
+4. Paste into Claude/ChatGPT with prompts/api-tests.md.
+5. Save to qa-tests/<api-name>/.
 6. Run `npx playwright test`.
 7. Fix or regenerate as needed.
 ```
 
-Then save your prompt in `~/Desktop/qa-tests/prompts/api-tests.md`
-so you can reuse it.
+Also save your working prompt to
+`~/Desktop/qa-tests/prompts/api-tests.md` so you can reuse it.
 
-This tiny doc + your working code **is your MVP done**.
+✅ **MVP complete.** You have:
+- Backstage running locally
+- One real API registered
+- A working prompt
+- A runnable test suite
+- A written 6-step loop
 
 ---
 
-## Part 6 — Level Up (Only After the Above Works)
+# Part 6 — Level Up (When You're Ready)
 
-Only after you've done Parts 1–5 successfully, consider these:
+Only after the above works smoothly. Each of these is a separate
+session, probably 1–2 hours each.
 
-### 6.1 Add a second API
+## 6.1 Add a second API
 
-Repeat Part 3 and Part 4 with a different OpenAPI spec. Good ones
-for practice:
-
+Repeat Session 2 step 3.2 and Session 3 with another API. Good
+practice targets:
 - Midtrans sandbox: https://api-docs.midtrans.com
 - JSONPlaceholder: https://jsonplaceholder.typicode.com
-- Your own company's API, if you have a spec
+- Your own company's API
 
-### 6.2 Wire Ollama through Backstage's proxy
+## 6.2 Wire Ollama through Backstage's proxy
 
-So you can call Ollama from the Backstage UI instead of from
-terminal. Edit `my-backstage/app-config.yaml` and add:
+Edit `my-backstage/app-config.yaml`, add:
 
 ```yaml
 proxy:
@@ -415,88 +352,27 @@ proxy:
       allowedHeaders: ['Content-Type']
 ```
 
-Restart Backstage. Now any fetch to
-`/api/proxy/ollama/api/generate` will hit your local Ollama.
+Restart. Now you can call Ollama from the Backstage frontend.
 
-### 6.3 Build a custom Scaffolder action
+## 6.3 Build a custom Scaffolder action
 
-This is the big upgrade: a Backstage form that takes an API and a
-model, and outputs generated tests with one click. See
-§A.3 in `qa-discovery-plan.md` for the full code skeleton. Don't
-attempt this until Parts 1–5 are comfortable — it needs you to edit
-TypeScript and understand the Backstage backend wiring.
+The big one: a Backstage form that generates tests with one click.
 
-### 6.4 Try Ollama Cloud
+See `qa-discovery-plan.md` Appendix A.3 for the full code skeleton.
+Don't attempt until 6.1 and 6.2 work.
 
-If you have access to a hosted Ollama endpoint, change the `target`
-URL in the proxy config from `http://localhost:11434` to your cloud
-URL. Everything else stays the same.
+## 6.4 Switch to Ollama Cloud
+
+Change `target` in the proxy config from `localhost:11434` to your
+cloud URL. Nothing else changes.
 
 ---
 
-## Part 7 — Things That Break, and Fixes
+# When Things Break
 
-### "command not found: yarn"
-Run `corepack enable` again. Close and reopen the terminal.
+See `qa-troubleshooting.md`. Has dedicated sections for toolchain,
+install, Backstage startup, catalog, AI/Ollama, and test runner
+errors.
 
-### "EACCES" or permission errors during npm/yarn install
-Don't use `sudo`. Instead:
-- On Mac/Linux: `sudo chown -R $(whoami) ~/.npm`
-- Or install Node via https://nodejs.org properly (it fixes perms).
-
-### Port 3000 or 7007 already in use
-Something else is running there. Either stop that thing, or change
-Backstage's port in `app-config.yaml` under `app.baseUrl` /
-`backend.baseUrl`.
-
-### Backstage won't start: "Cannot find module ..."
-Run `yarn install` inside `my-backstage` again. If that fails,
-delete `node_modules` and `.yarn/cache` and retry.
-
-### Petstore spec doesn't load in the UI
-Make sure you have internet. The `$text` URL is fetched live. If
-you're offline, download the spec JSON and reference it with a
-local path instead.
-
-### YAML error in `examples/entities.yaml`
-YAML is strict. Common problems:
-- Tabs instead of spaces (it hates tabs).
-- Missing `---` separator before a new entity.
-- Wrong indentation under `spec:`.
-Copy the snippet in §3.2 exactly.
-
-### Ollama is super slow
-Your model is too big for your RAM. Try a smaller one:
-`ollama pull mistral:7b` or `ollama pull phi3:mini`.
-
-### Playwright tests all fail with timeouts
-The API is unreachable or rate-limiting you. Try the URL in your
-browser first. If you're being rate-limited, add waits or use a
-sandbox with no rate limits (Petstore is usually fine).
-
-### AI output is garbage
-Your prompt needs work. Specifically:
-- Tell it the base URL explicitly.
-- Tell it the test framework explicitly.
-- Tell it to output ONLY code.
-- Give it one endpoint at a time, not the whole spec.
-
----
-
-## Part 8 — Done. What You Have
-
-If you followed all of Parts 1–5, you now have:
-
-- Backstage running on your laptop.
-- One real API registered in its catalog.
-- A working prompt that produces usable test code.
-- A test suite that actually runs against a real API.
-- A written 6-step loop you can repeat for any API.
-- Any bugs you find during testing.
-
-This is the complete QA MVP described in
-`qa-discovery-plan.md`. Everything past this (custom Scaffolder
-actions, MCP integration, CI automation, permissioning) is
-optional polish.
-
-Nice work.
+If it's not there, paste your exact error + step number into Claude
+Code using **Prompt 3** from `qa-claude-code-kickoff.md`.
